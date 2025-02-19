@@ -1,22 +1,27 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
 )
 
 func main() {
-	cmd := exec.Command("sh")
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWIPC | syscall.CLONE_NEWPID,
+	fmt.Println(os.Args)
+	switch os.Args[1] {
+	case "run":
+		run()
+	default:
+		panic("have not define")
 	}
-	cmd.Stdin = os.Stdin
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
+}
 
+func run() {
+	cmd := exec.Command(os.Args[2])
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		log.Fatal(err)
+		return
 	}
 }
