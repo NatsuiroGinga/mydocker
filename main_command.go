@@ -29,9 +29,8 @@ var runCommand = cli.Command{
 		if len(context.Args()) < 1 {
 			return fmt.Errorf("missing container command")
 		}
-		cmd := context.Args().Get(0)
 		tty := context.Bool("it")
-		Run(tty, cmd)
+		Run(tty, context.Args())
 		return nil
 	},
 }
