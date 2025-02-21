@@ -1,31 +1,34 @@
 package main
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
-	"syscall"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/urfave/cli"
 )
 
-func main() {
-	fmt.Println(os.Args)
-	switch os.Args[1] {
-	case "run":
-		run()
-	default:
-		panic("have not define")
-	}
-}
+const usage = `mydocker is a simple container runtime implementation.
+			   The purpose of this project is to learn how docker works and how to write a docker by ourselves
+			   Enjoy it, just for fun.`
 
-func run() {
-	cmd := exec.Command(os.Args[2])
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS,
+func main() {
+	app := cli.NewApp()
+	app.Name = "mydocker"
+	app.Usage = usage
+
+	app.Commands = []cli.Command{
+		initCommand,
+		runCommand,
 	}
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		panic(err)
+
+	app.Before = func(ctx *cli.Context) error {
+		log.SetFormatter(&log.JSONFormatter{})
+		log.SetOutput(os.Stdout)
+		log.SetReportCaller(true)
+		return nil
+	}
+
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
 	}
 }
