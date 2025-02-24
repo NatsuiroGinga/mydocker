@@ -12,7 +12,7 @@ all: clean uninstall install
 # 编译主程序并输出到 bin/app
 $(TARGET): $(GO_SOURCES)
 	@mkdir -p $(BIN_DIR)
-	go build -o $@ .
+	go build -race -o $@ .
 
 # 清理编译生成的文件
 clean:
