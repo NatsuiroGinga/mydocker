@@ -32,6 +32,14 @@ var runCommand = cli.Command{
 			Name:  "cpuset",
 			Usage: "cpu limit, e.g.: -cpuset 2,4",
 		},
+		cli.StringFlag{ // 数据卷
+			Name:  "v",
+			Usage: "volume, e.g.: -v /etc/conf:/etc/conf",
+		},
+		cli.StringFlag{
+			Name:  "name, ",
+			Usage: "container name, e.g.: --name my_container",
+		},
 	},
 	/*
 		这里是run命令执行的真正函数。
@@ -64,7 +72,11 @@ var runCommand = cli.Command{
 
 		containerName := context.String("name")
 
-		Run(tty, cmdArray, resConf, containerName, imageName)
+		logrus.Infof("containerName: %s", containerName)
+
+		volume := context.String("v")
+
+		Run(tty, cmdArray, resConf, containerName, imageName, volume, nil)
 		return nil
 	},
 }
@@ -81,4 +93,19 @@ var initCommand = cli.Command{
 		err := container.RunContainerInitProcess()
 		return err
 	},
+}
+
+var commitCommand = cli.Command{
+	Name:  "commit",
+	Usage: "commit container to image",
+	Action: cli.ActionFunc(func(ctx *cli.Context) error {
+		if len(ctx.Args()) == 0 {
+			return fmt.Errorf("missing image name")
+		}
+
+		containerID := ctx.Args().Get(0)
+		imageName := ctx.Args().Get(1)
+
+		return commitContainer(containerID, imageName)
+	}),
 }
