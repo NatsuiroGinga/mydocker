@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/NatsuiroGinga/mydocker/cgroups"
 	"github.com/NatsuiroGinga/mydocker/cgroups/resource"
@@ -18,14 +17,9 @@ import (
 去初始化容器的一些资源。
 */
 func Run(tty bool, comArray []string, res *resource.ResourceConfig, containerName, imageName, volume string, envs []string) {
-	var seed string
-	if len(containerName) > 0 {
-		seed = containerName
-	} else {
-		seed = imageName
-	}
+	// 生成容器 id
+	containerId := container.GenerateContainerID(imageName)
 
-	containerId := container.GenerateContainerID(seed) // 生成容器 id
 	logrus.Infof("containerID: %s", containerId)
 	cmd, writePipe := container.NewParentProcess(tty, containerId, imageName, volume, envs)
 
@@ -33,8 +27,16 @@ func Run(tty bool, comArray []string, res *resource.ResourceConfig, containerNam
 		logrus.Errorf("new parent process error")
 		return
 	}
+	// 启动子进程
 	if err := cmd.Start(); err != nil {
 		logrus.Errorf("run parent.Start err:%v", err)
+	}
+
+	// 记录容器信息， 写入/var/lib/mydocker/[containerId]/config.json中
+	_, err := container.RecordContainerInfo(cmd.Process.Pid, comArray, containerName, containerId)
+	if err != nil {
+		logrus.Errorf("Record container info error %v", err)
+		return
 	}
 
 	cgroupManager := cgroups.NewCgroupManager("mydocker-cgroup")
@@ -44,16 +46,12 @@ func Run(tty bool, comArray []string, res *resource.ResourceConfig, containerNam
 	// 在子进程创建后通过管道来发送参数
 	sendInitCommand(comArray, writePipe)
 
-	if tty {
+	if tty { // // 如果是tty，那么父进程等待，就是前台运行，否则就是跳过，实现后台运行
 		cmd.Wait() // 前台运行，等待容器进程结束
 	}
 
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
 	// 然后创建一个 goroutine 来处理后台运行的清理工作
 	go func() {
-		defer wg.Done()
-
 		if !tty {
 			// 等待子进程退出
 			_, _ = cmd.Process.Wait()
@@ -61,15 +59,11 @@ func Run(tty bool, comArray []string, res *resource.ResourceConfig, containerNam
 
 		// 清理工作
 		container.DeleteWorkSpace(containerId, volume)
-		// container.DeleteContainerInfo(containerId)
-		// if net != "" {
-		// 	network.Disconnect(net, containerInfo)
-		// }
+		container.DeleteContainerInfo(containerId)
 
 		// 销毁 cgroup
 		cgroupManager.Destroy()
 	}()
-	wg.Wait()
 }
 
 // sendInitCommand 通过writePipe将指令发送给子进程

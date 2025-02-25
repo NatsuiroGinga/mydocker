@@ -40,6 +40,10 @@ var runCommand = cli.Command{
 			Name:  "name, ",
 			Usage: "container name, e.g.: --name my_container",
 		},
+		cli.BoolFlag{
+			Name:  "d",
+			Usage: "detach container,run background",
+		},
 	},
 	/*
 		这里是run命令执行的真正函数。
@@ -48,7 +52,7 @@ var runCommand = cli.Command{
 		3.调用Run function去准备启动容器:
 	*/
 	Action: func(context *cli.Context) error {
-		if len(context.Args()) < 1 {
+		if len(context.Args()) == 0 {
 			return fmt.Errorf("missing container command")
 		}
 
@@ -61,6 +65,17 @@ var runCommand = cli.Command{
 		cmdArray = cmdArray[1:]
 
 		tty := context.Bool("it")
+		detach := context.Bool("d")
+
+		if tty && detach {
+			return fmt.Errorf("it and d flag can not both provided")
+		}
+
+		logrus.Debugf("detach: %v", detach)
+
+		if !detach { // 如果不是指定后台运行，就默认前台运行
+			tty = true
+		}
 
 		resConf := &resource.ResourceConfig{
 			MemoryLimit: context.String("m"),
@@ -71,6 +86,8 @@ var runCommand = cli.Command{
 		logrus.Infof("ResourceConfig: %#v", resConf)
 
 		containerName := context.String("name")
+
+		logrus.Infof("image name: %s", imageName)
 
 		logrus.Infof("containerName: %s", containerName)
 
@@ -107,5 +124,14 @@ var commitCommand = cli.Command{
 		imageName := ctx.Args().Get(1)
 
 		return commitContainer(containerID, imageName)
+	}),
+}
+
+var listCommand = cli.Command{
+	Name:  "ps",
+	Usage: "list all the containers",
+	Action: cli.ActionFunc(func(ctx *cli.Context) error {
+		ListContainers()
+		return nil
 	}),
 }
