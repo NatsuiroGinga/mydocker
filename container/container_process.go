@@ -1,6 +1,7 @@
 package container
 
 import (
+	"fmt"
 	"hash/fnv"
 	"os"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/NatsuiroGinga/mydocker/constant"
 	"github.com/NatsuiroGinga/mydocker/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -20,6 +22,7 @@ const (
 	InfoLocFormat = InfoLoc + "%s/"
 	ConfigName    = "config.json"
 	LogFile       = "%s-json.log"
+	MetaFile      = "/var/lib/mydocker/containers/meta.json"
 )
 
 type Info struct {
@@ -61,11 +64,26 @@ func NewParentProcess(tty bool, containerId, imageName, volume string, envs []st
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+	} else { // 对于后台运行容器，将 stdout、stderr 重定向到日志文件中，便于后续查看
+		dirPath := fmt.Sprintf(InfoLocFormat, containerId)
+		if err := os.MkdirAll(dirPath, constant.Perm0622); err != nil {
+			logrus.Errorf("NewParentProcess mkdir %s error %v", dirPath, err)
+			return nil, nil
+		}
+		stdLogFilePath := dirPath + GetLogfile(containerId)
+		stdLogFile, err := os.Create(stdLogFilePath)
+		if err != nil {
+			logrus.Errorf("NewParentProcess create file %s error %v", stdLogFilePath, err)
+			return nil, nil
+		}
+		cmd.Stdout = stdLogFile
+		cmd.Stderr = stdLogFile
 	}
 
 	// 指定 cmd 的工作目录为我们前面准备好的用于存放busybox rootfs的目录
 	NewWorkSpace(containerId, imageName, volume)
 
+	cmd.Env = append(os.Environ(), envs...)
 	cmd.ExtraFiles = []*os.File{readPipe}
 	if len(envs) != 0 {
 		cmd.Env = append(cmd.Env, envs...)
@@ -81,4 +99,9 @@ func GenerateContainerID(seed string) string {
 	generator.Write([]byte(seed))
 	generator.Write([]byte(time.Now().String()))
 	return strconv.Itoa(int(generator.Sum32()))
+}
+
+// GetLogfile build logfile name by containerId
+func GetLogfile(containerId string) string {
+	return fmt.Sprintf(LogFile, containerId)
 }

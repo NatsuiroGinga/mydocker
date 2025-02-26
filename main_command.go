@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/NatsuiroGinga/mydocker/cgroups/resource"
 	"github.com/NatsuiroGinga/mydocker/container"
@@ -120,10 +121,10 @@ var commitCommand = cli.Command{
 			return fmt.Errorf("missing image name")
 		}
 
-		containerID := ctx.Args().Get(0)
+		containerName := ctx.Args().Get(0)
 		imageName := ctx.Args().Get(1)
 
-		return commitContainer(containerID, imageName)
+		return commitContainer(containerName, imageName)
 	}),
 }
 
@@ -132,6 +133,40 @@ var listCommand = cli.Command{
 	Usage: "list all the containers",
 	Action: cli.ActionFunc(func(ctx *cli.Context) error {
 		ListContainers()
+		return nil
+	}),
+}
+
+var logCommand = cli.Command{
+	Name:  "logs",
+	Usage: "print logs of a container",
+	Action: cli.ActionFunc(func(ctx *cli.Context) error {
+		if len(ctx.Args()) == 0 {
+			return fmt.Errorf("please input your container name")
+		}
+		containerName := ctx.Args().Get(0)
+		logContainer(containerName)
+		return nil
+	}),
+}
+
+var execCommand = cli.Command{
+	Name:  "exec",
+	Usage: "exec a command into container, e.g.: mydocker exec 123456789 /bin/sh",
+	Action: cli.ActionFunc(func(ctx *cli.Context) error {
+		// 如果环境变量存在，说明C代码已经运行过了，即setns系统调用已经执行了，这里就直接返回，避免重复执行
+		if os.Getenv(EnvExecPid) != "" {
+			log.Infof("pid callback pid %v", os.Getgid())
+			return nil
+		}
+		// 格式：mydocker exec 容器名字 命令，因此至少会有两个参数
+		if len(ctx.Args()) < 2 {
+			return fmt.Errorf("missing container name or command")
+		}
+		containerName := ctx.Args().Get(0)
+		// 将除了容器名之外的参数作为命令部分
+		commandArray := ctx.Args().Tail()
+		ExecContainer(containerName, commandArray)
 		return nil
 	}),
 }
