@@ -17,7 +17,7 @@ __attribute__((constructor)) void enter_namespace(void) {
 	if (mydocker_pid) {
 		fprintf(stdout, "got mydocker_pid=%s\n", mydocker_pid);
 	} else {
-		fprintf(stdout, "missing mydocker_pid env skip nsenter");
+		// fprintf(stdout, "missing mydocker_pid env skip nsenter");
 		// 如果没有指定PID就不需要继续执行，直接退出
 		return;
 	}

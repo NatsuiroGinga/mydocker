@@ -22,7 +22,9 @@ func RecordContainerInfo(
 	containerPid int,
 	commandArray []string,
 	containerName,
-	containerId string) (*Info, error) {
+	containerId,
+	volume,
+	containerIp string) (*Info, error) {
 
 	if len(containerName) == 0 {
 		containerName = containerId
@@ -37,6 +39,8 @@ func RecordContainerInfo(
 		CreatedTime: time.Now().Format(time.DateTime),
 		Status:      RUNNING,
 		Name:        containerName,
+		Volume:      volume,
+		IP:          containerIp,
 	}
 
 	jsonBytes, err := json.Marshal(containerInfo)
@@ -71,4 +75,18 @@ func DeleteContainerInfo(containerID string) error {
 		return errors.Join(err, fmt.Errorf("remove dir %s failed", dirPath))
 	}
 	return nil
+}
+
+func GetContainerInfoById(containerId string) (*Info, error) {
+	dirPath := fmt.Sprintf(InfoLocFormat, containerId)
+	configFilePath := path.Join(dirPath, ConfigName)
+	contentBytes, err := os.ReadFile(configFilePath)
+	if err != nil {
+		return nil, errors.Join(err, fmt.Errorf("read file %s", configFilePath))
+	}
+	var containerInfo Info
+	if err = json.Unmarshal(contentBytes, &containerInfo); err != nil {
+		return nil, err
+	}
+	return &containerInfo, nil
 }

@@ -2,12 +2,15 @@ package main
 
 import (
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/NatsuiroGinga/mydocker/cgroups"
 	"github.com/NatsuiroGinga/mydocker/cgroups/resource"
 	"github.com/NatsuiroGinga/mydocker/container"
+	"github.com/NatsuiroGinga/mydocker/network"
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // Run 执行具体 command
@@ -16,7 +19,7 @@ import (
 进程，然后在子进程中，调用/proc/self/exe,也就是调用自己，发送init参数，调用我们写的init方法，
 去初始化容器的一些资源。
 */
-func Run(tty bool, comArray []string, res *resource.ResourceConfig, containerName, imageName, volume string, envs []string) {
+func Run(tty bool, comArray []string, res *resource.ResourceConfig, containerName, imageName, volume string, envs []string, net string, portMapping []string) {
 	// 生成容器 id
 	containerId := container.GenerateContainerID(imageName)
 
@@ -32,16 +35,34 @@ func Run(tty bool, comArray []string, res *resource.ResourceConfig, containerNam
 		logrus.Errorf("run parent.Start err:%v", err)
 	}
 
+	cgroupManager := cgroups.NewCgroupManager("mydocker-cgroup")
+	cgroupManager.Set(res)
+	cgroupManager.Apply(cmd.Process.Pid)
+	var containerIP string
+	// 如果指定了网络信息则进行配置
+	if net != "" {
+		// config container network
+		containerInfo := &container.Info{
+			Id:          containerId,
+			Pid:         strconv.Itoa(cmd.Process.Pid),
+			Name:        containerName,
+			PortMapping: portMapping,
+		}
+		ip, err := network.Connect(net, containerInfo)
+		if err != nil {
+			log.Errorf("Error Connect Network %v", err)
+			return
+		}
+		containerIP = ip.String()
+	}
+	
 	// 记录容器信息， 写入/var/lib/mydocker/[containerId]/config.json中
-	_, err := container.RecordContainerInfo(cmd.Process.Pid, comArray, containerName, containerId)
+	containerInfo, err := container.RecordContainerInfo(cmd.Process.Pid, comArray, containerName, containerId, volume, containerIP)
 	if err != nil {
 		logrus.Errorf("Record container info error %v", err)
 		return
 	}
 
-	cgroupManager := cgroups.NewCgroupManager("mydocker-cgroup")
-	cgroupManager.Set(res)
-	cgroupManager.Apply(cmd.Process.Pid)
 
 	// 在子进程创建后通过管道来发送参数
 	sendInitCommand(comArray, writePipe)
@@ -60,7 +81,9 @@ func Run(tty bool, comArray []string, res *resource.ResourceConfig, containerNam
 		// 清理工作
 		container.DeleteWorkSpace(containerId, volume)
 		container.DeleteContainerInfo(containerId)
-
+		if net != "" {
+			network.Disconnect(net, containerInfo)
+		}
 		// 销毁 cgroup
 		cgroupManager.Destroy()
 	}()

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/NatsuiroGinga/mydocker/cgroups/resource"
 	"github.com/NatsuiroGinga/mydocker/container"
+	"github.com/NatsuiroGinga/mydocker/network"
 	"github.com/urfave/cli"
 
 	"github.com/sirupsen/logrus"
@@ -44,6 +46,18 @@ var runCommand = cli.Command{
 		cli.BoolFlag{
 			Name:  "d",
 			Usage: "detach container,run background",
+		},
+		cli.StringSliceFlag{ // 增加 -e flag
+			Name:  "e",
+			Usage: "set environment,e.g. -e name=mydocker",
+		},
+		cli.StringFlag{
+			Name:  "net",
+			Usage: "container network，e.g. -net testbr",
+		},
+		cli.StringSliceFlag{
+			Name:  "p",
+			Usage: "port mapping,e.g. -p 8080:80 -p 30336:3306",
 		},
 	},
 	/*
@@ -93,8 +107,12 @@ var runCommand = cli.Command{
 		logrus.Infof("containerName: %s", containerName)
 
 		volume := context.String("v")
+		envs := context.StringSlice("e")
 
-		Run(tty, cmdArray, resConf, containerName, imageName, volume, nil)
+		network := context.String("net")
+		portMapping := context.StringSlice("p")
+
+		Run(tty, cmdArray, resConf, containerName, imageName, volume, envs, network, portMapping)
 		return nil
 	},
 }
@@ -131,8 +149,15 @@ var commitCommand = cli.Command{
 var listCommand = cli.Command{
 	Name:  "ps",
 	Usage: "list all the containers",
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "a",
+			Usage: "show all containers, e.g.: mydocker ps -a",
+		},
+	},
 	Action: cli.ActionFunc(func(ctx *cli.Context) error {
-		ListContainers()
+		all := ctx.Bool("a")
+		ListContainers(all)
 		return nil
 	}),
 }
@@ -169,4 +194,95 @@ var execCommand = cli.Command{
 		ExecContainer(containerName, commandArray)
 		return nil
 	}),
+}
+
+var stopCommand = cli.Command{
+	Name:  "stop",
+	Usage: "stop a container,e.g. mydocker stop 1234567890",
+	Action: cli.ActionFunc(func(ctx *cli.Context) error {
+		// 输入应该是：mydocker stop [containerID]
+		if len(ctx.Args()) == 0 {
+			return errors.New("missing container id")
+		}
+		containerName := ctx.Args().Get(0)
+		stopContainer(containerName)
+		return nil
+	}),
+}
+
+var removeCommand = cli.Command{
+	Name:  "rm",
+	Usage: "remove unused containers,e.g. mydocker rm 1234567890",
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "f", // 强制删除
+			Usage: "force delete containers, e.g. mydocker rm 1234567890",
+		},
+	},
+	Action: cli.ActionFunc(func(ctx *cli.Context) error {
+		if len(ctx.Args()) == 0 {
+			return errors.New("missing container id")
+		}
+		containerId := ctx.Args().Get(0)
+		force := ctx.Bool("f")
+		removeContainer(containerId, force)
+		return nil
+	}),
+}
+
+var networkCommand = cli.Command{
+	Name:  "network",
+	Usage: "container network commands",
+	Subcommands: []cli.Command{
+		{
+			Name:  "create",
+			Usage: "create a container network",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "driver",
+					Usage: "network driver",
+				},
+				cli.StringFlag{
+					Name:  "subnet",
+					Usage: "subnet cidr",
+				},
+			},
+			Action: func(context *cli.Context) error {
+				if len(context.Args()) < 1 {
+					return fmt.Errorf("missing network name")
+				}
+				driver := context.String("driver")
+				subnet := context.String("subnet")
+				name := context.Args()[0]
+
+				err := network.CreateNetwork(driver, subnet, name)
+				if err != nil {
+					return fmt.Errorf("create network error: %+v", err)
+				}
+				return nil
+			},
+		},
+		{
+			Name:  "list",
+			Usage: "list container network",
+			Action: func(context *cli.Context) error {
+				network.ListNetwork()
+				return nil
+			},
+		},
+		{
+			Name:  "remove",
+			Usage: "remove container network",
+			Action: func(context *cli.Context) error {
+				if len(context.Args()) < 1 {
+					return fmt.Errorf("missing network name")
+				}
+				err := network.DeleteNetwork(context.Args()[0])
+				if err != nil {
+					return fmt.Errorf("remove network error: %+v", err)
+				}
+				return nil
+			},
+		},
+	},
 }

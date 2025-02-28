@@ -38,8 +38,9 @@ func NewWorkSpace(containerID, imageName, volume string) {
 	}
 }
 
-// DeleteWorkSpace Delete the UFS filesystem while container exit
 /*
+DeleteWorkSpace Delete the UFS filesystem while container exit
+
 和创建相反
 1）有volume则卸载volume
 
@@ -48,6 +49,7 @@ func NewWorkSpace(containerID, imageName, volume string) {
 注意：一定要要先 umount volume ，然后再删除目录，否则由于 bind mount 存在，删除临时目录会导致 volume 目录中的数据丢失。
 
 2）卸载并移除merged目录
+
 3）卸载并移除upper、worker层
 */
 func DeleteWorkSpace(containerID, volume string) {

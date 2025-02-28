@@ -19,7 +19,7 @@ import (
 
 3. 最后格式化成 table 形式打印出来即可
 */
-func ListContainers() {
+func ListContainers(all bool) {
 	// 读取存放在容器信息目录下的所有文件
 	files, err := os.ReadDir(container.InfoLoc)
 	if err != nil {
@@ -35,6 +35,11 @@ func ListContainers() {
 			log.Errorf("get container info error %v", err)
 			continue
 		}
+
+		if !all && tmpContainer.Status == container.STOP {
+			continue
+		}
+
 		containers = append(containers, tmpContainer)
 	}
 	// 使用tabwriter.NewWriter在控制台打印出容器信息
